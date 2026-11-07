@@ -1,6 +1,6 @@
 {
   "name": "sessionboard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-judged leaderboard of your Claude Code sessions: rates each session when it ends, keeps your top 3, and exports them redacted for sharing.",
   "author": { "name": "Kush Bang" },
   "keywords": ["sessions", "portfolio", "sharing", "leaderboard"]
