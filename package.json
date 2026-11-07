@@ -1,6 +1,6 @@
 {
   "name": "sessionboard",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "An AI-judged leaderboard of your Claude Code sessions. Keeps your top 3 current and exports them, redacted, for sharing.",
   "type": "module",
   "bin": {

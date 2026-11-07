@@ -19,6 +19,9 @@ const INDEX_FILE = path.join(DATA_DIR, 'index.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const TOP_FILE = path.join(DATA_DIR, 'TOP3.md');
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
+// The rating hook always runs this copy, so its path survives plugin updates and npm/repo moves.
+const APP_DIR = path.join(DATA_DIR, 'app');
+const APP_FILES = ['bin/sessionboard.mjs', 'lib/dashboard.html', 'package.json'];
 const LOCK_FILE = path.join(DATA_DIR, 'index.lock');
 const CHILD_ENV = 'SESSIONBOARD_CHILD';
 const PARSER_VERSION = 1;
@@ -555,9 +558,34 @@ function patchClaudeSettings(mutate) {
   writeJSON(CLAUDE_SETTINGS, settings);
 }
 
-const pluginInstalled = (settings) => Object.keys(settings.enabledPlugins || {}).some((k) => k.startsWith('sessionboard@'));
-const hookCommand = () => SELF.includes(`${path.sep}_npx${path.sep}`) ? 'npx -y sessionboard hook' : `node "${SELF}" hook`;
 const hasOurHook = (settings) => JSON.stringify(settings.hooks?.SessionEnd || []).includes('sessionboard');
+const hookCommand = () => `node "${path.join(APP_DIR, 'bin', 'sessionboard.mjs')}" hook`;
+
+const versionOf = (dir) => readJSON(path.join(dir, 'package.json'), {}).version || '0.0.0';
+const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+
+function installAppCopy() {
+  if (path.resolve(ROOT) === path.resolve(APP_DIR)) return;
+  for (const rel of APP_FILES) {
+    fs.mkdirSync(path.dirname(path.join(APP_DIR, rel)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, rel), path.join(APP_DIR, rel));
+  }
+}
+
+// Any newer sessionboard (plugin update, npm upgrade) that runs refreshes the copy the hook uses.
+function refreshAppCopy() {
+  try { if (fs.existsSync(APP_DIR) && newer(versionOf(ROOT), versionOf(APP_DIR))) installAppCopy(); } catch {}
+}
+
+// Adds the rating hook to settings.json unless one is already there (from any install route).
+function ensureHook(st) {
+  installAppCopy();
+  if (hasOurHook(st)) return false;
+  st.hooks ??= {};
+  st.hooks.SessionEnd ??= [];
+  st.hooks.SessionEnd.push({ hooks: [{ type: 'command', command: hookCommand(), timeout: 10 }] });
+  return true;
+}
 
 // ---------- dashboard ----------
 
@@ -752,7 +780,7 @@ async function configure(flags, { firstRun }) {
     ], 0, 2);
   }
   let hook = false;
-  if (!pluginInstalled(settings) && !hasOurHook(settings)) {
+  if (!hasOurHook(settings)) {
     hook = await ask('Rate sessions automatically when they end? (adds a hook to ~/.claude/settings.json)', [
       { label: 'Yes', value: true, hint: 'recommended' },
       { label: 'No', value: false, hint: 'run `sessionboard update` yourself' },
@@ -760,7 +788,7 @@ async function configure(flags, { firstRun }) {
   }
 
   const cfg = { judge: model !== false, judgeModel: model || cur.judgeModel, rejudgeGrowth, topN, minPrompts, minToolCalls, redactEmails, redactTerms };
-  const hookState = pluginInstalled(settings) ? 'via plugin' : hasOurHook(settings) ? 'installed' : hook ? 'add hook' : 'off (manual updates)';
+  const hookState = hasOurHook(settings) ? 'on (hook already installed)' : hook ? 'add hook' : 'off (manual updates)';
   const keepState = days >= 365 ? `${days} days` : retention ? `${retention} days ${dim(`(was ${days || 30})`)}` : `${days || 30} days ${dim('(unchanged)')}`;
   const row = (k, v) => `${padEnd(dim(k), 20)}${v}`;
   console.log(`\n${box([
@@ -785,11 +813,7 @@ function applySetup({ cfg, retention, hook }) {
   if (retention || hook) {
     patchClaudeSettings((st) => {
       if (retention) st.cleanupPeriodDays = retention;
-      if (hook) {
-        st.hooks ??= {};
-        st.hooks.SessionEnd ??= [];
-        st.hooks.SessionEnd.push({ hooks: [{ type: 'command', command: hookCommand(), timeout: 10 }] });
-      }
+      if (hook) ensureHook(st);
     });
     console.log(`  ${green('✔')} Updated ${tildify(CLAUDE_SETTINGS)} ${dim(`(backup: ${path.basename(CLAUDE_SETTINGS)}.sessionboard-backup)`)}`);
   }
@@ -919,6 +943,7 @@ const HELP = `sessionboard - an AI-judged leaderboard of your Claude Code sessio
   sessionboard pin|unpin|hide|unhide <id> curate the board by hand
   sessionboard show <rank|id>             all stats for one session
   sessionboard config                     change settings interactively (or: config key=value)
+  sessionboard uninstall [--purge]        remove the rating hook (and with --purge, all data)
 
 Data lives in ${tildify(DATA_DIR)}; TOP3.md there is always current.`;
 
@@ -940,19 +965,66 @@ async function main() {
   }
 
   if (cmd === 'plugin-start') {
-    // Plugin SessionStart hook. The plugin ships its own SessionEnd hook, so a copy that
-    // `sessionboard init` added to settings.json (npm route, before the plugin) would rate every
-    // session twice. Remove it so only one hook is ever set up.
-    if (process.env[CHILD_ENV]) return;
-    const settings = readJSON(CLAUDE_SETTINGS, null);
-    if (!settings || !hasOurHook(settings)) return;
-    patchClaudeSettings((st) => {
-      const kept = st.hooks.SessionEnd.filter((h) => !JSON.stringify(h).includes('sessionboard'));
-      if (kept.length) st.hooks.SessionEnd = kept; else delete st.hooks.SessionEnd;
-      if (!Object.keys(st.hooks).length) delete st.hooks;
-    });
-    console.log(JSON.stringify({ systemMessage: `sessionboard: the plugin now rates your sessions, so the duplicate hook \`sessionboard init\` added to ${tildify(CLAUDE_SETTINGS)} was removed (backup: ${path.basename(CLAUDE_SETTINGS)}.sessionboard-backup).` }));
+    // Plugin SessionStart hook: until setup has run, point the user to /sessionboard:setup (once).
+    if (process.env[CHILD_ENV] || loadConfig().initialized) return;
+    const marker = path.join(DATA_DIR, '.setup-nudged');
+    if (fs.existsSync(marker)) return;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(marker, new Date().toISOString());
+    console.log(JSON.stringify({ systemMessage: 'sessionboard is installed. Run /sessionboard:setup to turn on AI rating of your sessions.' }));
     return;
+  }
+
+  refreshAppCopy();
+
+  // Non-interactive setup used by /sessionboard:setup: Claude asks the questions, then calls these.
+  if (cmd === 'setup-info') {
+    const settings = readJSON(CLAUDE_SETTINGS, {});
+    const index = scan();
+    const sessions = Object.values(index.sessions);
+    return console.log(JSON.stringify({
+      config: loadConfig(),
+      cleanupPeriodDays: settings.cleanupPeriodDays ?? 30,
+      hookInstalled: hasOurHook(settings),
+      sessions: sessions.length,
+      eligible: sessions.filter((x) => x.eligible && !x.missing).length,
+      unrated: sessions.filter((x) => x.eligible && !x.missing && !x.judge).length,
+    }, null, 2));
+  }
+
+  if (cmd === 'setup-apply') {
+    const cur = loadConfig();
+    const num = (v, d) => (v === undefined || v === true ? d : Number(v));
+    const model = flags.judgeModel ?? cur.judgeModel;
+    const cfg = {
+      judge: model !== 'off',
+      judgeModel: model === 'off' ? cur.judgeModel : model,
+      rejudgeGrowth: num(flags.rejudgeGrowth, cur.rejudgeGrowth),
+      topN: num(flags.topN, cur.topN),
+      minPrompts: num(flags.minPrompts, cur.minPrompts),
+      minToolCalls: num(flags.minToolCalls, cur.minToolCalls),
+      redactEmails: flags.redactEmails === undefined ? cur.redactEmails : flags.redactEmails !== 'false',
+      redactTerms: flags.redactTerms === undefined ? cur.redactTerms : String(flags.redactTerms === true ? '' : flags.redactTerms).split(',').map((x) => x.trim()).filter(Boolean),
+    };
+    const retention = flags.retention && flags.retention !== 'keep' ? Number(flags.retention) : null;
+    applySetup({ cfg, retention, hook: flags.hook === 'yes' });
+    scan();
+    return;
+  }
+
+  if (cmd === 'uninstall') {
+    // Removes the rating hook and the app copy; your scores stay in ~/.sessionboard unless --purge.
+    const settings = readJSON(CLAUDE_SETTINGS, null);
+    if (settings && hasOurHook(settings)) {
+      patchClaudeSettings((st) => {
+        const kept = st.hooks.SessionEnd.filter((h) => !JSON.stringify(h).includes('sessionboard'));
+        if (kept.length) st.hooks.SessionEnd = kept; else delete st.hooks.SessionEnd;
+        if (!Object.keys(st.hooks).length) delete st.hooks;
+      });
+      console.log(`Removed the sessionboard hook from ${tildify(CLAUDE_SETTINGS)}.`);
+    }
+    fs.rmSync(flags.purge ? DATA_DIR : APP_DIR, { recursive: true, force: true });
+    return console.log(flags.purge ? `Deleted ${tildify(DATA_DIR)}.` : `Your scores are kept in ${tildify(DATA_DIR)} (use --purge to delete them).`);
   }
 
   if (cmd === 'help' || flags.help || flags.h) return console.log(HELP);
@@ -992,13 +1064,13 @@ async function main() {
 
   if (cmd === 'update') {
     if (canJudge) await judgePending({ log });
-    else if (!cfg.initialized) log('Not initialized yet; run `sessionboard init` to enable AI rating.\n');
+    else if (!cfg.initialized) log('Not set up yet; run `sessionboard init` (or /sessionboard:setup in Claude Code) to enable AI rating.\n');
     if (!flags.quiet) console.log(`Updated. ${Object.keys(readIndex().sessions).length} sessions indexed → ${tildify(TOP_FILE)}`);
     return;
   }
 
   if (cmd === 'top' || cmd === 'ls') {
-    if (!cfg.initialized) console.log(`\n  ${yellow('!')} AI rating is off until you run ${accent('sessionboard init')}`);
+    if (!cfg.initialized) console.log(`\n  ${yellow('!')} AI rating is off until you run ${accent('sessionboard init')} ${dim('(or /sessionboard:setup in Claude Code)')}`);
     console.log(`\n  ${bold(`Your top ${Number(flags.n) || cfg.topN} agent sessions`)}\n`);
     printTop(readIndex(), Number(flags.n) || cfg.topN);
     console.log(`\n  ${dim('share one:')} ${accent('sessionboard share 1 --html')}   ${dim('dashboard:')} ${accent('sessionboard dashboard')}\n`);

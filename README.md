@@ -14,11 +14,12 @@ Companies now ask you to share your best AI agent session. After hundreds of cha
 
 ## Install
 
-As a Claude Code plugin, which rates sessions automatically:
+As a Claude Code plugin:
 
 ```
 /plugin marketplace add kbiam/sessionboard
 /plugin install sessionboard@sessionboard
+/sessionboard:setup
 ```
 
 Or as a CLI:
@@ -28,9 +29,7 @@ npm install -g sessionboard
 sessionboard init
 ```
 
-`init` walks you through setup and asks before it changes any Claude Code settings.
-
-Use one route or the other. If you set up the CLI hook and install the plugin later, the plugin removes the CLI hook on its first start, so sessions aren't rated twice.
+Setup asks a few questions (judge model, board size, words to hide) and asks before it changes any Claude Code settings. Both routes share one rating hook: if one is already installed, setup leaves it alone, so installing both never rates a session twice.
 
 ## Usage
 
@@ -39,9 +38,10 @@ sessionboard dashboard        # open the dashboard at localhost:4317
 sessionboard top              # show your top sessions
 sessionboard share 1 --html   # export your #1 session as a redacted page
 sessionboard config           # change settings
+sessionboard uninstall        # remove the rating hook
 ```
 
-Inside Claude Code: `/sessionboard:dashboard`, `/sessionboard:top`, `/sessionboard:share 1`.
+Inside Claude Code: `/sessionboard:setup`, `/sessionboard:dashboard`, `/sessionboard:top`, `/sessionboard:share 1`.
 
 ## How it works
 
