@@ -752,12 +752,7 @@ async function configure(flags, { firstRun }) {
     ], 0, 2);
   }
   let hook = false;
-  if (pluginInstalled(settings) && hasOurHook(settings)) {
-    hook = await ask('The plugin now rates your sessions. Remove the old hook from ~/.claude/settings.json?', [
-      { label: 'Yes', value: 'remove', hint: 'recommended: avoids a duplicate hook' },
-      { label: 'No', value: false, hint: 'harmless: it steps aside while the plugin is installed' },
-    ], 0, 1);
-  } else if (!pluginInstalled(settings) && !hasOurHook(settings)) {
+  if (!pluginInstalled(settings) && !hasOurHook(settings)) {
     hook = await ask('Rate sessions automatically when they end? (adds a hook to ~/.claude/settings.json)', [
       { label: 'Yes', value: true, hint: 'recommended' },
       { label: 'No', value: false, hint: 'run `sessionboard update` yourself' },
@@ -765,7 +760,7 @@ async function configure(flags, { firstRun }) {
   }
 
   const cfg = { judge: model !== false, judgeModel: model || cur.judgeModel, rejudgeGrowth, topN, minPrompts, minToolCalls, redactEmails, redactTerms };
-  const hookState = hook === 'remove' ? 'via plugin (remove old hook)' : pluginInstalled(settings) ? 'via plugin' : hasOurHook(settings) ? 'installed' : hook ? 'add hook' : 'off (manual updates)';
+  const hookState = pluginInstalled(settings) ? 'via plugin' : hasOurHook(settings) ? 'installed' : hook ? 'add hook' : 'off (manual updates)';
   const keepState = days >= 365 ? `${days} days` : retention ? `${retention} days ${dim(`(was ${days || 30})`)}` : `${days || 30} days ${dim('(unchanged)')}`;
   const row = (k, v) => `${padEnd(dim(k), 20)}${v}`;
   console.log(`\n${box([
@@ -790,11 +785,7 @@ function applySetup({ cfg, retention, hook }) {
   if (retention || hook) {
     patchClaudeSettings((st) => {
       if (retention) st.cleanupPeriodDays = retention;
-      if (hook === 'remove') {
-        const kept = (st.hooks?.SessionEnd || []).filter((h) => !JSON.stringify(h).includes('sessionboard'));
-        if (kept.length) st.hooks.SessionEnd = kept; else delete st.hooks.SessionEnd;
-        if (st.hooks && !Object.keys(st.hooks).length) delete st.hooks;
-      } else if (hook) {
+      if (hook) {
         st.hooks ??= {};
         st.hooks.SessionEnd ??= [];
         st.hooks.SessionEnd.push({ hooks: [{ type: 'command', command: hookCommand(), timeout: 10 }] });
@@ -939,8 +930,6 @@ async function main() {
   if (cmd === 'hook') {
     // SessionEnd hook: return immediately, rate the session that just ended in a detached child.
     if (process.env[CHILD_ENV]) return;
-    // A hook in settings.json defers to the plugin's hook when both are installed, so a session is rated once.
-    if (!flags['from-plugin'] && pluginInstalled(readJSON(CLAUDE_SETTINGS, {}))) return;
     let input = {};
     try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch {}
     const id = input.session_id || (input.transcript_path && path.basename(input.transcript_path, '.jsonl'));
@@ -981,13 +970,7 @@ async function main() {
   if (cmd === 'rate-one') {
     if (!canJudge) return;
     const id = pos[0] && index.sessions[pos[0]] ? pos[0] : null;
-    if (!id) return;
-    // One rating job per session, even if two hooks fire for it.
-    const lock = path.join(DATA_DIR, `rating-${id}.lock`);
-    try { if (Date.now() - fs.statSync(lock).mtimeMs > 5 * 60e3) fs.unlinkSync(lock); } catch {}
-    try { fs.writeFileSync(lock, String(process.pid), { flag: 'wx' }); } catch { return; }
-    try { await judgeAndStore(id, { log }); } catch (err) { console.error(`${new Date().toISOString()} ${pos[0]}: ${err.message}`); }
-    finally { try { fs.unlinkSync(lock); } catch {} }
+    try { if (id) await judgeAndStore(id, { log }); } catch (err) { console.error(`${new Date().toISOString()} ${pos[0]}: ${err.message}`); }
     return;
   }
 

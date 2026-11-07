@@ -3,7 +3,7 @@
     "SessionEnd": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/sessionboard.mjs\" hook --from-plugin", "timeout": 10 }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/sessionboard.mjs\" hook", "timeout": 10 }
         ]
       }
     ]
