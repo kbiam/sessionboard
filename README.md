@@ -30,6 +30,8 @@ sessionboard init
 
 `init` walks you through setup and asks before it changes any Claude Code settings.
 
+Use one route or the other. If you set up the CLI hook and install the plugin later, the plugin removes the CLI hook on its first start, so sessions aren't rated twice.
+
 ## Usage
 
 ```bash

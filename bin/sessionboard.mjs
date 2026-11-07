@@ -939,6 +939,22 @@ async function main() {
     return;
   }
 
+  if (cmd === 'plugin-start') {
+    // Plugin SessionStart hook. The plugin ships its own SessionEnd hook, so a copy that
+    // `sessionboard init` added to settings.json (npm route, before the plugin) would rate every
+    // session twice. Remove it so only one hook is ever set up.
+    if (process.env[CHILD_ENV]) return;
+    const settings = readJSON(CLAUDE_SETTINGS, null);
+    if (!settings || !hasOurHook(settings)) return;
+    patchClaudeSettings((st) => {
+      const kept = st.hooks.SessionEnd.filter((h) => !JSON.stringify(h).includes('sessionboard'));
+      if (kept.length) st.hooks.SessionEnd = kept; else delete st.hooks.SessionEnd;
+      if (!Object.keys(st.hooks).length) delete st.hooks;
+    });
+    console.log(JSON.stringify({ systemMessage: `sessionboard: the plugin now rates your sessions, so the duplicate hook \`sessionboard init\` added to ${tildify(CLAUDE_SETTINGS)} was removed (backup: ${path.basename(CLAUDE_SETTINGS)}.sessionboard-backup).` }));
+    return;
+  }
+
   if (cmd === 'help' || flags.help || flags.h) return console.log(HELP);
   if (cmd === 'init') return init(flags);
   if (cmd === 'dashboard' || cmd === 'ui') { scan(); return dashboard(flags); }
