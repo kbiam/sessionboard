@@ -1,0 +1,36 @@
+{
+  "name": "sessionboard",
+  "version": "0.1.0",
+  "description": "An AI-judged leaderboard of your Claude Code sessions. Keeps your top 3 current and exports them, redacted, for sharing.",
+  "type": "module",
+  "bin": {
+    "sessionboard": "bin/sessionboard.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "commands",
+    "hooks",
+    ".claude-plugin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "agent",
+    "ai",
+    "session",
+    "portfolio",
+    "leaderboard"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kbiam/sessionboard.git"
+  },
+  "homepage": "https://github.com/kbiam/sessionboard",
+  "author": "Kush Bang"
+}

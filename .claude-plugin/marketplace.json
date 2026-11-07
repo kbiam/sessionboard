@@ -1,0 +1,11 @@
+{
+  "name": "sessionboard",
+  "owner": { "name": "Kush Bang" },
+  "plugins": [
+    {
+      "name": "sessionboard",
+      "source": "./",
+      "description": "AI-judged leaderboard of your Claude Code sessions with redacted sharing and a local dashboard."
+    }
+  ]
+}

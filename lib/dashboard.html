@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sessionboard</title>
+<style>
+:root{
+  --bg:#f7f6f3;--fg:#1d1c1a;--mute:#6f6b64;--faint:#a29d94;--card:#fff;--line:#e5e1da;--hover:#f1eee8;
+  --accent:#c4643f;--accent-soft:#f6e6de;--gold:#b8860b;--silver:#7d8590;--bronze:#a0522d;--err:#b3261e;--ok:#2f7d4f;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#171614;--fg:#ecebe7;--mute:#a19c93;--faint:#6d6961;--card:#211f1d;--line:#34312d;--hover:#2a2825;
+  --accent:#e08560;--accent-soft:#3a2a22;--gold:#e0b440;--silver:#aab2bd;--bronze:#d08a5c;--err:#f2b8b5;--ok:#7fd1a0;
+  --shadow:none;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-size:22px;margin:0;letter-spacing:-.01em}
+.brand .sub{color:var(--mute);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.ghost{border-color:transparent;background:transparent;padding:4px 8px;color:var(--mute)}
+.btn.ghost:hover{background:var(--hover);color:var(--fg)}
+.btn[disabled]{opacity:.5;cursor:default}
+.status{color:var(--mute);font-size:12px}
+.notice{background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:20px;font-size:13px}
+
+h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 12px}
+.podium{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;min-width:0}
+.card .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rank{font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.rank .medal{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-size:12px}
+.m1{background:var(--gold)}.m2{background:var(--silver)}.m3{background:var(--bronze)}.mx{background:var(--faint)}
+.score{font-weight:700;font-size:22px;letter-spacing:-.02em}
+.score small{font-size:13px;color:var(--mute);font-weight:500}
+.card h3{margin:0;font-size:16px;line-height:1.35;overflow-wrap:anywhere}
+.card .summary{margin:0;color:var(--fg)}
+.card .why{margin:0;color:var(--mute);font-size:13px}
+.meta{color:var(--mute);font-size:12px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;background:var(--hover);border-radius:999px;padding:2px 9px;color:var(--mute)}
+.card .actions{display:flex;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:wrap}
+.tag{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);color:var(--mute)}
+.tag.warn{color:var(--err);border-color:currentColor}
+
+.tablecard{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.toolbar input{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;min-width:0;flex:1;max-width:280px}
+.toolbar label{font-size:13px;color:var(--mute);display:flex;align-items:center;gap:6px}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--mute);font-size:12px;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--fg)}
+th.num,td.num{text-align:right}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--hover)}
+tr.dim td{color:var(--faint)}
+td .t{font-weight:500;color:var(--fg);overflow-wrap:anywhere}
+tr.dim td .t{color:var(--faint)}
+td .s{color:var(--mute);font-size:12px;margin-top:2px;max-width:520px}
+.bar{display:inline-block;width:44px;height:6px;border-radius:3px;background:var(--hover);vertical-align:middle;margin-left:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .15s}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--bg);border-left:1px solid var(--line);transform:translateX(100%);transition:transform .2s ease;display:flex;flex-direction:column;z-index:2}
+.drawer.open{transform:none}
+.dhead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;background:var(--card)}
+.dhead .row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dhead h3{margin:0;font-size:18px;line-height:1.3;overflow-wrap:anywhere}
+.dbody{overflow-y:auto;padding:16px 20px 60px;flex:1}
+.turn{margin:12px 0;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+.turn.user{background:var(--accent-soft)}
+.who{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}
+.tool{font-size:12px;color:var(--mute);margin:3px 0;overflow-wrap:anywhere}
+.tool b{font-weight:600;margin-right:6px}
+.tool.err b{color:var(--err)}
+.menu{position:relative;display:inline-block}
+.menu .pop{position:absolute;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;min-width:210px;display:none;z-index:5}
+.menu.open .pop{display:block}
+.pop button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px;font-size:13px}
+.pop button:hover{background:var(--hover)}
+.pop .hint{font-size:11px;color:var(--mute);padding:6px 10px 4px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:all .2s;pointer-events:none;z-index:10}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.empty{padding:40px 16px;text-align:center;color:var(--mute)}
+@media (max-width:640px){.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>sessionboard</h1><span class="sub" id="sub">your best agent sessions</span></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="status" id="status"></span>
+      <button class="btn" id="refresh">↻ Refresh</button>
+    </div>
+  </header>
+  <div id="notice"></div>
+
+  <h2 id="podiumTitle">Top sessions</h2>
+  <div class="podium" id="podium"></div>
+
+  <h2>All sessions</h2>
+  <div class="tablecard">
+    <div class="toolbar">
+      <input id="q" placeholder="Search title, summary, project…" type="search">
+      <label><input type="checkbox" id="showAll"> show trivial &amp; hidden</label>
+    </div>
+    <div class="tscroll"><table>
+      <thead><tr>
+        <th data-k="rank" class="num">#</th>
+        <th data-k="title">Session</th>
+        <th data-k="score" class="num">Score</th>
+        <th data-k="date" class="hide-sm">Date</th>
+        <th data-k="tools" class="num hide-sm">Tools</th>
+        <th data-k="files" class="num hide-sm">Files</th>
+        <th data-k="active" class="num hide-sm">Active</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dhead" id="dhead"></div>
+  <div class="dbody" id="dbody"></div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const api = (p, opts = {}) => fetch(p, { ...opts, headers: { 'x-sessionboard': '1', ...(opts.headers || {}) } });
+let state = { sessions: [], topN: 3 }, sortKey = 'rank', sortDir = 1, current = null, poll = null;
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
+
+async function load() {
+  const r = await api('/api/sessions');
+  state = await r.json();
+  render();
+  // keep polling while a judge run is in progress
+  clearTimeout(poll);
+  if (state.judging) poll = setTimeout(load, 2500);
+}
+
+const scoreOf = (s) => s.judge ? s.judge.score : null;
+const medal = (r) => `<span class="medal ${r <= 3 ? 'm' + r : 'mx'}">${r}</span>`;
+const chips = (s) => {
+  const c = [`${s.stats.toolCalls} tool calls`];
+  if (s.stats.files) c.push(`${s.stats.files} files`);
+  if (s.stats.tests) c.push(`${s.stats.tests} test/build runs`);
+  if (s.stats.commits) c.push(`${s.stats.commits} commits`);
+  if (s.stats.prs) c.push(`${s.stats.prs} PRs`);
+  c.push(`${s.stats.prompts} prompts`, `${s.active} active`);
+  return c.map((x) => `<span class="chip">${esc(x)}</span>`).join('');
+};
+const tags = (s) => [
+  s.pinned && '<span class="tag">📌 pinned</span>',
+  s.hidden && '<span class="tag">hidden</span>',
+  s.missing && '<span class="tag warn">transcript deleted</span>',
+  state.judging === s.id && '<span class="tag">judging…</span>',
+].filter(Boolean).join(' ');
+
+function shareMenu(s) {
+  if (s.missing) return '';
+  return `<div class="menu" data-menu="${s.id}">
+    <button class="btn primary" data-act="menu">Share ▾</button>
+    <div class="pop">
+      <div class="hint">Redacted: keys, tokens, secrets, emails, home paths</div>
+      <button data-act="dl-html">Download HTML page</button>
+      <button data-act="dl-md">Download Markdown</button>
+      <button data-act="copy-md">Copy Markdown</button>
+      <button data-act="open-html">Open shareable page</button>
+    </div></div>`;
+}
+
+function render() {
+  const ranked = state.sessions.filter((s) => s.rank).sort((a, b) => a.rank - b.rank);
+  const top = ranked.slice(0, state.topN);
+  $('#podiumTitle').textContent = `Top ${state.topN} sessions`;
+  $('#sub').textContent = `${state.sessions.length} sessions · ${ranked.filter((s) => s.judge).length} rated`;
+  $('#status').textContent = state.judging === 'all' ? 'Rating new sessions…' : state.judging ? 'Rating a session…' : state.updatedAt ? `updated ${new Date(state.updatedAt).toLocaleTimeString()}` : '';
+  $('#notice').innerHTML = !state.judgeEnabled ? '<div class="notice">AI rating is off. Run <code>sessionboard config judge=true</code> to enable it.</div>'
+    : ranked.length && !ranked.some((s) => s.judge) ? '<div class="notice">Sessions aren\'t rated yet. Run <code>sessionboard init</code> in your terminal to set up rating.</div>' : '';
+
+  $('#podium').innerHTML = top.length ? top.map((s) => `
+    <article class="card" data-id="${s.id}">
+      <div class="top">
+        <span class="rank">${medal(s.rank)} ${tags(s)}</span>
+        <span class="score">${scoreOf(s) ?? '–'}<small>/10</small></span>
+      </div>
+      <h3>${esc(s.title)}</h3>
+      ${s.judge?.summary ? `<p class="summary">${esc(s.judge.summary)}</p>` : ''}
+      ${s.judge?.reason ? `<p class="why">${esc(s.judge.reason)}</p>` : ''}
+      <div class="meta"><span>${esc(s.date)}</span><span class="mono">${esc(s.project || '')}</span></div>
+      <div class="chips">${chips(s)}</div>
+      <div class="actions">
+        ${shareMenu(s)}
+        <button class="btn" data-act="view">Preview</button>
+        <button class="btn ghost" data-act="${s.pinned ? 'unpin' : 'pin'}">${s.pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="btn ghost" data-act="hide">Hide</button>
+      </div>
+    </article>`).join('') : '<div class="empty">No eligible sessions yet. Do some real work with Claude Code, then refresh.</div>';
+
+  const q = $('#q').value.trim().toLowerCase();
+  const showAll = $('#showAll').checked;
+  let rows = state.sessions.filter((s) => showAll || s.rank);
+  if (q) rows = rows.filter((s) => [s.title, s.project, s.judge?.summary, s.judge?.reason].join(' ').toLowerCase().includes(q));
+  const key = {
+    rank: (s) => s.rank ?? 1e9, title: (s) => s.title.toLowerCase(), score: (s) => -(scoreOf(s) ?? -1) * 1000 - s.heuristic,
+    date: (s) => -(Date.parse(s.start) || 0), tools: (s) => -s.stats.toolCalls, files: (s) => -s.stats.files, active: (s) => -s.activeMinutes,
+  }[sortKey];
+  rows.sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * sortDir);
+  $('#rows').innerHTML = rows.length ? rows.map((s) => {
+    const sc = scoreOf(s);
+    return `<tr data-id="${s.id}" class="${s.rank ? '' : 'dim'}">
+      <td class="num">${s.rank ?? '–'}</td>
+      <td><div class="t">${esc(s.title)} ${tags(s)}</div><div class="s">${esc(s.judge?.summary || s.project || '')}</div></td>
+      <td class="num" style="white-space:nowrap">${sc ?? '–'}${sc != null ? `<span class="bar"><i style="width:${sc * 10}%"></i></span>` : ''}</td>
+      <td class="hide-sm" style="white-space:nowrap">${esc(s.date)}</td>
+      <td class="num hide-sm">${s.stats.toolCalls}</td>
+      <td class="num hide-sm">${s.stats.files}</td>
+      <td class="num hide-sm" style="white-space:nowrap">${esc(s.active)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">Nothing matches.</td></tr>';
+
+  if (current) renderDrawerHead(state.sessions.find((s) => s.id === current));
+}
+
+function renderDrawerHead(s) {
+  if (!s) return;
+  $('#dhead').innerHTML = `
+    <div class="row"><h3>${esc(s.title)}</h3><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
+    <div class="meta"><span>${s.rank ? '#' + s.rank : 'unranked'}</span><span><b>${scoreOf(s) ?? '–'}</b>/10</span><span>${esc(s.date)}</span><span class="mono">${esc(s.project || '')}</span>${s.model ? `<span>${esc(s.model)}</span>` : ''}</div>
+    ${s.judge?.summary ? `<div>${esc(s.judge.summary)}</div>` : ''}
+    ${s.judge?.reason ? `<div class="why" style="color:var(--mute);font-size:13px">why: ${esc(s.judge.reason)}</div>` : ''}
+    <div class="chips">${chips(s)} ${tags(s)}</div>
+    <div class="actions" style="display:flex;gap:6px;flex-wrap:wrap" data-id="${s.id}">
+      ${shareMenu(s)}
+      <button class="btn" data-act="rejudge" ${state.judging || s.missing ? 'disabled' : ''}>Re-rate</button>
+      <button class="btn ghost" data-act="${s.pinned ? 'unpin' : 'pin'}">${s.pinned ? 'Unpin' : 'Pin'}</button>
+      <button class="btn ghost" data-act="${s.hidden ? 'unhide' : 'hide'}">${s.hidden ? 'Unhide' : 'Hide'}</button>
+    </div>`;
+}
+
+async function openDrawer(id) {
+  current = id;
+  renderDrawerHead(state.sessions.find((s) => s.id === id));
+  $('#dbody').innerHTML = '<div class="empty">Loading transcript…</div>';
+  $('#drawer').classList.add('open'); $('#scrim').classList.add('open'); $('#drawer').setAttribute('aria-hidden', 'false');
+  const r = await api(`/api/sessions/${id}/transcript`);
+  const data = await r.json();
+  if (current !== id) return;
+  if (!r.ok) { $('#dbody').innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
+  $('#dbody').innerHTML = data.turns.map((t) => `<div class="turn ${t.role}"><div class="who">${t.role === 'user' ? 'You' : 'Claude'}</div>${
+    t.parts.map((p) => p.kind === 'tool'
+      ? `<div class="tool ${p.error ? 'err' : ''}"><b>${esc(p.name)}</b><code>${esc(p.text.slice(0, 180))}</code></div>`
+      : `<div class="txt">${esc(p.text)}</div>`).join('')}</div>`).join('');
+}
+function closeDrawer() { current = null; $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true'); }
+
+async function act(action, id, el) {
+  const base = `/api/sessions/${id}`;
+  if (action === 'menu') { const m = el.closest('.menu'); const open = m.classList.contains('open'); document.querySelectorAll('.menu.open').forEach((x) => x.classList.remove('open')); if (!open) m.classList.add('open'); return; }
+  document.querySelectorAll('.menu.open').forEach((x) => x.classList.remove('open'));
+  if (action === 'view') return openDrawer(id);
+  if (action === 'close') return closeDrawer();
+  if (action === 'dl-html' || action === 'dl-md') { location.href = `${base}/export?format=${action === 'dl-html' ? 'html' : 'md'}&download=1`; return toast('Downloading…'); }
+  if (action === 'open-html') return window.open(`${base}/export?format=html`, '_blank');
+  if (action === 'copy-md') {
+    const r = await api(`${base}/export?format=md`);
+    if (!r.ok) return toast((await r.json()).error);
+    await navigator.clipboard.writeText(await r.text());
+    return toast('Markdown copied. Skim it before sharing.');
+  }
+  if (['pin', 'unpin', 'hide', 'unhide'].includes(action)) { await api(`${base}/${action}`, { method: 'POST' }); toast(`${action[0].toUpperCase() + action.slice(1)}ned`.replace('Hidened', 'Hidden').replace('Unhidened', 'Unhidden')); return load(); }
+  if (action === 'rejudge') { const r = await api(`${base}/rejudge`, { method: 'POST' }); if (!r.ok) return toast((await r.json()).error); toast('Re-rating… (takes ~10s)'); return load(); }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (btn) { e.stopPropagation(); const id = btn.closest('[data-menu]')?.dataset.menu || btn.closest('[data-id]')?.dataset.id || current; return act(btn.dataset.act, id, btn); }
+  if (!e.target.closest('.menu')) document.querySelectorAll('.menu.open').forEach((x) => x.classList.remove('open'));
+  const row = e.target.closest('tbody tr[data-id], .card[data-id]');
+  if (row && !e.target.closest('.menu')) openDrawer(row.dataset.id);
+});
+$('#scrim').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+$('#q').addEventListener('input', render);
+$('#showAll').addEventListener('change', render);
+document.querySelectorAll('th[data-k]').forEach((th) => th.addEventListener('click', () => { sortDir = sortKey === th.dataset.k ? -sortDir : 1; sortKey = th.dataset.k; render(); }));
+$('#refresh').addEventListener('click', async () => { $('#refresh').disabled = true; await api('/api/refresh', { method: 'POST' }); await load(); $('#refresh').disabled = false; toast(state.judging ? 'Rescanned; rating new or grown sessions…' : 'Rescanned; everything is up to date'); });
+load();
+</script>
+</body>
+</html>
