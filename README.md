@@ -24,8 +24,8 @@ As a Claude Code plugin, which rates sessions automatically:
 Or as a CLI:
 
 ```bash
-git clone https://github.com/kbiam/sessionboard && cd sessionboard
-node bin/sessionboard.mjs init
+npm install -g sessionboard
+sessionboard init
 ```
 
 `init` walks you through setup and asks before it changes any Claude Code settings.
